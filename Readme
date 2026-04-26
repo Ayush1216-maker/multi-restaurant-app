@@ -1,0 +1,48 @@
+# Multi-Restaurant Online Food Ordering System: Architecture and Implementation Overview
+
+This document provides a detailed explanation of how the application is implemented across the Database, Backend, and Frontend layers.
+
+## 1. Database Layer
+**Technology:** MySQL
+**Interaction Method:** Object-Relational Mapping (ORM) via Hibernate (Spring Data JPA).
+**Configuration:** Database connection details are defined in `backend/src/main/resources/application.properties` (Database: `food_ordering_db`). Hibernate is configured with `ddl-auto=update`, meaning the database schema is automatically updated or created based on the Java entity classes.
+
+**Core Entities/Tables:**
+*   **Users & Security:** `User` and `Role` manage authentication and authorization (Customers, Admins, Restaurant Owners, Delivery Personnel).
+*   **Restaurant Catalog:** `Restaurant`, `Category`, and `Food` manage the multi-restaurant menu system.
+*   **Shopping & Orders:** `CartItem`, `Order`, `OrderItem` handle the shopping cart and checkout processes. `OrderStatus` tracks the lifecycle of an order.
+*   **Logistics:** `Delivery` and `DeliveryStatus` manage the assignment of orders to delivery personnel and tracking delivery progress.
+
+## 2. Backend Layer
+**Technology:** Java 17, Spring Boot (3.2.3), Maven.
+**Architecture:** Layered REST API Architecture.
+
+**Key Components:**
+*   **Security (`/security` & `/config`):** Spring Security with JSON Web Tokens (JWT) is used for stateless authentication. Passwords are encrypted, and endpoints are secured based on user roles.
+*   **Models (`/model`):** JPA Entities representing database tables with relationships (e.g., `@OneToMany`, `@ManyToOne`).
+*   **Repositories (`/repository`):** Spring Data JPA interfaces (`JpaRepository`) providing out-of-the-box CRUD operations and custom query methods without writing raw SQL.
+*   **Services (`/service`):** Contains the core business logic. It sits between the Controllers and Repositories, ensuring data integrity and applying business rules (e.g., calculating totals, managing order state transitions).
+*   **Data Transfer Objects (`/dto`):** Used to transfer data between the client and server, preventing exposure of internal database entities and structuring API responses.
+*   **Controllers (`/controller`):** REST endpoints (e.g., `AuthController`, `OrderController`, `FoodController`) that receive HTTP requests from the frontend, delegate tasks to the service layer, and return JSON responses.
+*   **Payment Integration:** Uses the official `stripe-java` SDK to process payments securely via Stripe during the checkout flow.
+
+## 3. Frontend Layer
+**Technology:** React 18, Vite, Tailwind CSS.
+**Architecture:** Single Page Application (SPA).
+
+**Key Components:**
+*   **Routing (`react-router-dom`):** Manages navigation between different views without reloading the page.
+    *   **Pages (`/src/pages`):** Includes role-specific dashboards (`AdminDashboard`, `RestaurantDashboard`, `DeliveryDashboard`), customer views (`Home`, `Cart`, `Checkout`, `Orders`, `PaymentSuccess`), and authentication (`Login`, `Register`).
+*   **State Management & Context (`/src/context`):** React Context API is used for managing global states, likely including user authentication state and shopping cart data, making it accessible across various components.
+*   **API Communication (`/src/services`):** `axios` is configured (likely in `api.js`) to make HTTP requests to the Spring Boot backend. It handles attaching the JWT token to the `Authorization` header for secured requests.
+*   **Styling:** Tailwind CSS is used for utility-first, responsive, and modern UI design.
+*   **Payment UI:** `@stripe/react-stripe-js` and `@stripe/stripe-js` are used to render secure Stripe Elements for capturing credit card details directly on the frontend during checkout.
+*   **Notifications:** `react-hot-toast` provides modern, animated toast notifications for user feedback (e.g., item added to cart, payment success).
+
+## Data Flow Summary (Example: Placing an Order)
+1.  **Frontend:** The user adds items to their cart and proceeds to the `Checkout` page. The React app collects the payment and shipping details.
+2.  **Frontend -> Backend:** A request is sent to the backend `OrderController` to initialize the order, alongside a call to Stripe to handle the payment intent.
+3.  **Backend (Service/Stripe):** The backend verifies the payment with Stripe. Upon success, the `OrderService` processes the cart, calculates totals, and creates `Order` and `OrderItem` objects.
+4.  **Backend -> Database:** The `OrderRepository` saves the new records into the MySQL database.
+5.  **Backend -> Frontend:** The backend responds with a success status to the frontend.
+6.  **Frontend:** The user is redirected to the `PaymentSuccess` page, and the cart is cleared from the frontend state.
